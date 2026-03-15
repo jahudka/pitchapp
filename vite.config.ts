@@ -12,6 +12,7 @@ export default defineConfig({
     SvelteKitPWA({
       registerType: 'autoUpdate',
       injectRegister: false,
+      base: process.env.BASE_PATH,
 
       pwaAssets: {
         disabled: false,
@@ -32,6 +33,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        navigateFallback: 'index.html',
       },
 
       devOptions: {
