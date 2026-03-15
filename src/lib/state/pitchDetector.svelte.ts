@@ -1,4 +1,4 @@
-import workletUrl from './worklet?url&no-inline';
+import workletUrl from './worklet?worker&url';
 
 export class PitchDetector {
   readonly #ctx: AudioContext = new AudioContext({
