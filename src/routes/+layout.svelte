@@ -11,6 +11,8 @@
 </script>
 
 <svelte:head>
+  <title>Pitch App</title>
+
   {#if pwaAssetsHead.themeColor}
     <meta name="theme-color" content={pwaAssetsHead.themeColor.content} />
   {/if}
