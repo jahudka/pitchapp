@@ -36,7 +36,7 @@ jobs:
       - name: Build site
         run: pnpm build
         env:
-          BASE_PATH: /pitch-app
+          BASE_PATH: /pitchapp
       - name: Configure pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
