@@ -12,6 +12,15 @@ const config = {
       base: process.env.BASE_PATH,
       relative: false,
     },
+    csp: {
+      mode: 'auto',
+      directives: {
+        'script-src': ['self'],
+        'style-src': ['self', 'unsafe-inline'],
+        'img-src': ['self', 'data:', 'blob:'],
+        'worker-src': ['self', 'blob:'],
+      },
+    },
   },
 };
 
