@@ -1,5 +1,10 @@
 import workletUrl from './worklet?worker&url';
 
+type Session = {
+  setWindow(value: number): void;
+  destroy(): void;
+};
+
 export class PitchDetector {
   readonly #ctx: AudioContext = new AudioContext({
     latencyHint: 'interactive',
@@ -12,9 +17,8 @@ export class PitchDetector {
   #aboveThreshold?: boolean = $derived(
     this.#average !== undefined ? this.#average >= this.#threshold : undefined,
   );
-  #stream?: Promise<MediaStream>;
   #initialized: boolean = false;
-  #detector?: AudioWorkletNode;
+  #session?: Session;
 
   get active(): boolean {
     return this.#active;
@@ -26,12 +30,7 @@ export class PitchDetector {
 
   set window(value: number) {
     this.#window = value;
-
-    const win = this.#detector?.parameters.get('window');
-
-    if (win) {
-      win.value = value;
-    }
+    this.#session?.setWindow(value);
   }
 
   get threshold(): number {
@@ -57,15 +56,14 @@ export class PitchDetector {
 
     this.#active = true;
 
-    const [, stream] = await Promise.all([
-      this.#ctx.resume(),
-      (this.#stream ??= this.#getMediaStream()),
-    ]);
+    const [stream] = await Promise.all([this.#createMediaStream(), this.#ctx.resume()]);
 
     if (!this.#initialized) {
+      await this.#ctx.audioWorklet.addModule(workletUrl);
       this.#initialized = true;
-      await this.#init(stream);
     }
+
+    this.#session = this.#createSession(stream);
   }
 
   async stop(): Promise<void> {
@@ -74,24 +72,52 @@ export class PitchDetector {
     }
 
     this.#active = false;
-    await this.#ctx.suspend();
+    this.#session?.destroy();
+    this.#session = undefined;
   }
 
-  async #init(mediaStream: MediaStream): Promise<void> {
-    await this.#ctx.audioWorklet.addModule(workletUrl);
-
+  #createSession(mediaStream: MediaStream): Session {
     const src = new MediaStreamAudioSourceNode(this.#ctx, { mediaStream });
-    this.#detector = this.#createDetector();
-    src.connect(this.#createHpf(80)).connect(this.#createLpf(1000)).connect(this.#detector);
+    const [chain, detector] = this.#buildChain(
+      src,
+      this.#createHpf(80),
+      this.#createLpf(1000),
+      this.#createDetector(),
+    );
 
-    this.#detector.port.addEventListener('message', (msg) => {
-      this.#average = msg.data.average;
-    });
+    detector.port.addEventListener('message', this.#handleMessage);
+    detector.port.start();
 
-    this.#detector.port.start();
+    const win = detector.parameters.get('window');
+
+    if (!win) {
+      throw new Error('Internal error: cannot get AudioWorklet param "window"');
+    }
+
+    return {
+      setWindow: (value: number): void => {
+        win.value = value;
+      },
+      destroy: (): void => {
+        for (const track of mediaStream.getAudioTracks()) {
+          track.stop();
+        }
+
+        for (const node of chain) {
+          node.disconnect();
+        }
+
+        detector.port.removeEventListener('message', this.#handleMessage);
+        detector.port.close();
+      },
+    };
   }
 
-  async #getMediaStream(): Promise<MediaStream> {
+  readonly #handleMessage = (evt: MessageEvent): void => {
+    this.#average = evt.data.average;
+  };
+
+  async #createMediaStream(): Promise<MediaStream> {
     return navigator.mediaDevices.getUserMedia({
       audio: {
         autoGainControl: false,
@@ -121,5 +147,10 @@ export class PitchDetector {
         window: this.#window,
       },
     });
+  }
+
+  #buildChain<E extends AudioNode>(...nodes: [...AudioNode[], E]): [AudioNode[], E] {
+    const end = nodes.reduce((node, next) => node.connect(next)) as E;
+    return [nodes, end];
   }
 }
