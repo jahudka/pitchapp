@@ -17,7 +17,7 @@ export default defineConfig({
         adapterFallback: 'index.html',
         trailingSlash: 'always',
         spa: {
-          fallbackMapping: '/',
+          fallbackMapping: process.env.BASE_PATH,
         },
       },
 
@@ -40,7 +40,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        navigateFallback: '/',
+        navigateFallback: process.env.BASE_PATH,
       },
 
       devOptions: {
